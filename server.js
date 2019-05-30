@@ -3,10 +3,18 @@ const cors = require('cors');
 const bodyParser = require('body-parser');
 const massive = require('massive');
 const session = require('express-session');
+const bcrypt = require('bycrpt');
+const saltRounds = 10;
+
 require('dotenv').config();
 
 const app = express();
 
+massive(process.env.CONNECTION_STRING)
+    .then((dbInstance)=>{
+        app.set('db', dbInstance)
+        console.log('The DB is working')
+    })
 app.use(cors());
 
 app.use(session({
@@ -18,25 +26,50 @@ app.use(session({
 
 app.use(bodyParser.json());
 
-app.get('/api/authenticate', (req, res) => {
-    req.utsession.user = {
-        name:'Josh',
-        id: 1,
-    }
-    res.send('welcome to the club!');
+app.post('/api/register', (req, res) => {
+    // Get DB instance
+    const db = req.app.get('db');
+
+    // Set up varaibles off of req.body
+    const {email, password} = req.body;
+
+    //Check to make sure is new user.
+    
+    db.user_table.findOne({email})
+        .then((user)=>{
+            // Send back message if email was there
+            if(user){
+                res.send('Sorry this email already exists. Please login.')
+            }else{ // Make New user
+                /// Encrypt password
+                bcrypt.hash(password, saltRounds, (err, hash) => {
+                    if(err){ // Handle error
+                        res.send('Something broke')
+                    }else{
+                        /// create new user with hashed password.
+                        return db.user_table.insert({email, password:hash})
+                    }
+                  });
+            }
+        })
+        // assign user to session. 
+        .then((user)=>{
+            console.log(user);
+            res.send('check')
+        })
+
 })
 
-app.use((req, res, next) => {
-    if(req.session.user){
-        next()
-    }else{
-        res.send("You need to authenticate.")
-    }
+app.post('/api/login', (req, res) => {
+    
 })
 
-app.get('/api/hello', (req, res)=>{
-    res.send(`This worked ${req.session.user.name}`)
+app.use((req, res)=>{
+
 })
+
+
+
 
 const port = process.env.PORT || 8055;
 app.listen(port, ()=>{
